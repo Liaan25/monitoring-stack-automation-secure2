@@ -1,0 +1,256 @@
+############################################################
+# sudoers.txt — шаблон прав для развертывания мониторинга
+# Целевой пользователь: mvp_dev (подставляется админом ОС)
+#
+# ВАЖНО:
+# - Здесь приведены как РЕКОМЕНДУЕМЫЕ правила, так и
+#   СПРАВОЧНЫЙ список команд из скрипта развертывания.
+# - Строки, начинающиеся с '#', являются комментариями и
+#   НЕ должны копироваться как рабочие правила sudo.
+# - Права задаются без указания конкретного логина
+#   (см. примеры кибербезопасности): ALL=(ALL:ALL) ...
+############################################################
+
+############################################################
+# 1. Рекомендуемое минимальное правило
+#    (запуск скрипта развертывания с правами root)
+#
+# Скрипт копируется Jenkins в:
+#   /tmp/deploy-monitoring/monitoring_deployment.sh
+# и запускается через sudo -n env ... bash "$REMOTE_SCRIPT_PATH".
+#
+# Рекомендуется выдать одно право на запуск скрипта
+# с атрибутом NOEXEC для исключения подстановки других бинарей.
+############################################################
+
+ALL=(ALL:ALL) NOEXEC: NOPASSWD: /bin/bash /tmp/deploy-monitoring/monitoring_deployment.sh
+
+
+############################################################
+# 2. (Опционально) Скрипты-обёртки
+#
+# Если администратор вынесет опасные команды (iptables и др.)
+# в отдельные скрипты-обёртки с валидацией параметров и
+# проверкой хеша, то можно выдать права только на них.
+#
+# Пути ниже являются примером и могут быть изменены при
+# установке (главное — конкретный бинарь без звёздочек
+# и без переменных в правиле).
+############################################################
+
+# Пример: обёртка для настройки iptables (белый список портов)
+#ALL=(ALL:ALL) NOEXEC: NOPASSWD: /opt/monitoring/bin/iptables_wrapper.sh
+
+# Пример: обёртка для работы с RLM (curl к RLM API с валидацией)
+#ALL=(ALL:ALL) NOEXEC: NOPASSWD: /opt/monitoring/bin/rlm_task_wrapper.sh
+
+# Пример: обёртка для безопасной записи конфигов
+#ALL=(ALL:ALL) NOEXEC: NOPASSWD: /opt/monitoring/bin/config_writer.sh
+
+
+############################################################
+# 3. (Опционально) Модель CI → mon_sys для user-юнитов
+#
+# В соответствии с методичкой SberInfra рекомендуется, чтобы:
+#  - CI/ТУЗ (`<KAE>-lnx-mon_ci`) управлял user-юнитами;
+#  - сервисная nologin-УЗ (`<KAE>-lnx-mon_sys`) запускала сервисы;
+#  - linger и группы (`as-admin`, `systemd-journal`) настраивались
+#    через RLM/IDM и скрипты linuxadm-*.
+#
+# Ниже приведён ПРИМЕР (шаблон) sudoers для PROD, который должен
+# быть инстанцирован администратором ОС/IDM под конкретный KAE.
+#
+# ВАЖНО:
+#  - Переменные и <KAE> в sudoers недопустимы, поэтому OS/IDM
+#    должны подставить конкретное значение (например CI84324523).
+#  - Разрешаются только конкретные команды systemctl --user для
+#    нужных юнитов (без звёздочек и без ALL).
+############################################################
+
+# Шаблон (НЕ копировать дословно, требуется подстановка KAE)
+#
+# <KAE>-lnx-mon_ci ALL=(<KAE>-lnx-mon_sys) NOEXEC: NOPASSWD: \
+#   /usr/bin/systemctl --user daemon-reload, \
+#   /usr/bin/systemctl --user restart monitoring-prometheus.service, \
+#   /usr/bin/systemctl --user restart monitoring-grafana.service, \
+#   /usr/bin/systemctl --user restart monitoring-harvest.service
+
+# Пример для конкретного KAE = CI84324523:
+#
+# CI84324523-lnx-mon_ci ALL=(CI84324523-lnx-mon_sys) NOEXEC: NOPASSWD: \
+#   /usr/bin/systemctl --user daemon-reload, \
+#   /usr/bin/systemctl --user restart monitoring-prometheus.service, \
+#   /usr/bin/systemctl --user restart monitoring-grafana.service, \
+#   /usr/bin/systemctl --user restart monitoring-harvest.service
+
+
+############################################################
+# 4. Справочный список Linux-команд из скрипта
+#    deploy_monitoring_script.sh
+#
+# ВНИМАНИЕ:
+# - Это НЕ готовые строки для sudoers.
+# - Здесь есть переменные, конвейеры, циклы и т.п.,
+#   которые НЕ допускаются в /etc/sudoers.
+# - Список предназначен для анализа кибербезопасностью
+#   и проектирования скриптов-обёрток и белых списков.
+############################################################
+
+# -------- Сетевые и служебные проверки портов ----------
+# ss -tln | grep -q ":$port "
+# ss -tlnp | grep ":$port " | awk -F, '{for(i=1;i<=NF;i++) if ($i ~ /pid=/) {print $i}}' | awk -F= '{print $2}' | sort -u
+
+# -------- Управление процессами по PID ------------------
+# ps -p "$pid" -o pid,ppid,cmd --no-headers
+# kill -TERM "$pid"
+# kill -0 "$pid"
+# kill -9 "$pid"
+
+# -------- Определение IP и домена -----------------------
+# hostname -I | awk '{print $1}'
+# nslookup "$SERVER_IP" 2>/dev/null | grep 'name =' | awk '{print $4}' | sed 's/\.$//' | head -1
+# nslookup "$SERVER_IP" 2>/dev/null | grep -E "^$SERVER_IP" | awk '{print $2}' | sed 's/\.$//' | head -1
+# hostname -f 2>/dev/null || hostname
+
+# -------- Работа с каталогами и файлами -----------------
+# mkdir -p "$env_dir"
+# mkdir -p "$INSTALL_DIR"
+# mkdir -p "$VAULT_CONF_DIR" "$VAULT_LOG_DIR" "$VAULT_CERTS_DIR"
+# rm -rf "$dir"
+# rm -rf "$file"
+# rm -rf "$LOCAL_CRED_JSON" "/home/${SUDO_USER:-}/temp_data_cred.json" "$PWD/temp_data_cred.json" "$(dirname "$0")/temp_data_cred.json" "/tmp/temp_data_cred.json"
+# mkdir -p /opt/harvest/cert
+# mkdir -p /etc/grafana/cert
+# mkdir -p /etc/prometheus/cert
+# mkdir -p /etc/sysconfig
+# cp "$VAULT_CRT_FILE" /opt/harvest/cert/harvest.crt
+# cp "$VAULT_KEY_FILE" /opt/harvest/cert/harvest.key
+# cp "$VAULT_CRT_FILE" /etc/grafana/cert/crt.crt
+# cp "$VAULT_KEY_FILE" /etc/grafana/cert/key.key
+# cp "$VAULT_CRT_FILE" /etc/prometheus/cert/server.crt
+# cp "$VAULT_KEY_FILE" /etc/prometheus/cert/server.key
+# cp "$ca_src" /etc/prometheus/cert/ca_chain.crt
+# ln -sf /opt/harvest/bin/harvest /usr/local/bin/harvest
+# ln -sf /opt/harvest/harvest /usr/local/bin/harvest
+
+# -------- Управление владельцами и правами -------------
+# /usr/bin/chown --reference=/opt/vault/conf /opt/vault/certs
+# /usr/bin/chmod --reference=/opt/vault/conf /opt/vault/certs
+# /usr/bin/chown --reference=/opt/vault/conf /opt/vault/conf/role_id.txt /opt/vault/conf/secret_id.txt
+# chown harvest:harvest /opt/harvest/cert
+# chown harvest:harvest /opt/harvest/cert/harvest.*
+# chown root:grafana /etc/grafana/cert
+# /usr/bin/chown root:grafana /etc/grafana/cert/crt.crt
+# /usr/bin/chown root:grafana /etc/grafana/cert/key.key
+# chown prometheus:prometheus /etc/prometheus/cert
+# chown prometheus:prometheus /etc/prometheus/cert/server.*
+# chown prometheus:prometheus /etc/prometheus/cert/ca_chain.crt
+# chown prometheus:prometheus /etc/prometheus/web-config.yml /etc/prometheus/prometheus.env
+# chown prometheus:prometheus /etc/prometheus/prometheus.env
+# chmod 640 "$VAULT_ROLE_ID_FILE" "$VAULT_SECRET_ID_FILE"
+# chmod 640 /opt/harvest/cert/harvest.crt
+# chmod 600 /opt/harvest/cert/harvest.key
+# chmod 640 /etc/grafana/cert/crt.crt
+# chmod 640 /etc/grafana/cert/key.key
+# chmod 640 /etc/prometheus/cert/server.crt
+# chmod 600 /etc/prometheus/cert/server.key
+# chmod 644 /etc/prometheus/cert/ca_chain.crt
+# chmod 600 "/opt/vault/certs/grafana-client.pem"
+# chmod 640 /etc/grafana/grafana.ini
+# chmod 640 /etc/prometheus/web-config.yml /etc/prometheus/prometheus.env
+# chmod 640 /etc/prometheus/prometheus.env
+# chmod +x /etc/profile.d/harvest.sh
+# chmod 600 "$STATE_FILE"
+
+# -------- OpenSSL и сертификаты -------------------------
+# openssl pkey -in "/opt/vault/certs/server_bundle.pem" -out "/opt/harvest/cert/harvest.key"
+# openssl crl2pkcs7 -nocrl -certfile "/opt/vault/certs/server_bundle.pem" | openssl pkcs7 -print_certs -out "/opt/harvest/cert/harvest.crt"
+# openssl pkey -in "/opt/vault/certs/server_bundle.pem" -out "/etc/grafana/cert/key.key"
+# openssl crl2pkcs7 -nocrl -certfile "/opt/vault/certs/server_bundle.pem" | openssl pkcs7 -print_certs -out "/etc/grafana/cert/crt.crt"
+# openssl pkey -in "/opt/vault/certs/server_bundle.pem" -out "/etc/prometheus/cert/server.key"
+# openssl crl2pkcs7 -nocrl -certfile "/opt/vault/certs/server_bundle.pem" | openssl pkcs7 -print_certs -out "/etc/prometheus/cert/server.crt"
+# openssl pkey -in "/opt/vault/certs/grafana-client.pem" -out "/opt/vault/certs/grafana-client.key"
+# openssl crl2pkcs7 -nocrl -certfile "/opt/vault/certs/grafana-client.pem" | openssl pkcs7 -print_certs -out "/opt/vault/certs/grafana-client.crt"
+
+# -------- systemd / сервисы -----------------------------
+# systemctl is-active --quiet "$service"
+# systemctl stop "$service"
+# systemctl disable "$service"
+# systemctl daemon-reload
+# systemctl restart vault-agent
+# systemctl status vault-agent --no-pager
+# systemctl enable prometheus
+# systemctl restart prometheus
+# systemctl status prometheus --no-pager
+# systemctl enable grafana-server
+# systemctl restart grafana-server
+# systemctl status grafana-server --no-pager
+# systemctl is-active --quiet harvest
+# systemctl stop harvest
+# systemctl enable harvest
+# systemctl restart harvest
+# systemctl status harvest --no-pager
+
+# -------- RPM / пакеты ----------------------------------
+# rpm -q "$package"
+# rpm -e "$package" --nodeps
+
+# -------- iptables / firewall ---------------------------
+# iptables -C INPUT -p tcp -s 127.0.0.1 --dport "$PROMETHEUS_PORT" -j ACCEPT
+# iptables -I INPUT 1 -p tcp -s 127.0.0.1 --dport "$PROMETHEUS_PORT" -j ACCEPT
+# iptables -C INPUT -p tcp -s "$SERVER_IP" --dport "$PROMETHEUS_PORT" -j ACCEPT
+# iptables -I INPUT 1 -p tcp -s "$SERVER_IP" --dport "$PROMETHEUS_PORT" -j ACCEPT
+# iptables -C INPUT -p tcp --dport "$PROMETHEUS_PORT" -j REJECT
+# iptables -I INPUT 3 -p tcp --dport "$PROMETHEUS_PORT" -j REJECT
+# ip6tables -C INPUT -p tcp -s ::1 --dport "$PROMETHEUS_PORT" -j ACCEPT
+# ip6tables -I INPUT 1 -p tcp -s ::1 --dport "$PROMETHEUS_PORT" -j ACCEPT
+# ip6tables -C INPUT -p tcp --dport "$PROMETHEUS_PORT" -j REJECT
+# ip6tables -I INPUT 2 -p tcp --dport "$PROMETHEUS_PORT" -j REJECT
+# iptables -C INPUT -p tcp --dport "$port" -j ACCEPT
+# iptables -A INPUT -p tcp --dport "$port" -j ACCEPT
+# iptables -C INPUT -p tcp --dport 13000:14000 -j ACCEPT
+# iptables -A INPUT -p tcp --dport 13000:14000 -j ACCEPT
+# iptables-save > /etc/sysconfig/iptables
+
+# -------- jq / обработка JSON ---------------------------
+# jq -n --arg v_url "$SEC_MAN_ADDR_UPPER" --arg tenant "$NAMESPACE_CI" --arg kae "$KAE_SERVER" --arg ip "$SERVER_IP" '{ ... }'
+# echo "$vault_create_resp" | jq -r '.id // empty'
+# echo "$vault_status_resp" | jq -r '.status // empty'
+# jq -re '."vault-agent".role_id' "$cred_json_path"
+# jq -re '."vault-agent".secret_id' "$cred_json_path"
+# jq -n --arg url "$url" --arg ip "$SERVER_IP" '{ ... }'
+# echo "$response" | jq -r '.id // empty'
+# echo "$status_response" | jq -r '.status // empty'
+# jq -n --arg url "https://${SERVER_DOMAIN}:${PROMETHEUS_PORT}" --arg sn "${SERVER_DOMAIN}" '{ ... }'
+# jq -n --arg name "$service_account_name" --arg role "Admin" '{name:$name, role:$role}'
+# echo "$body" | jq -r '.id // empty'
+# echo "$list_body" | jq -r '.[] | select(.name=="...") | .id'
+# jq -n --arg name "$token_name" '{name:$name}'
+# echo "$tok_body" | jq -r '.key // empty'
+# echo "$ds_resp" | jq -er '.[0].uid'
+# echo "$ds_obj" | jq -er '.id'
+
+# -------- curl / HTTP(S) запросы ------------------------
+# curl -k -s -X POST "$RLM_API_URL/api/tasks.json" -H "Accept: application/json" -H "Authorization: Token $RLM_TOKEN" -H "Content-Type: application/json" -d "$payload"
+# curl -k -s -X GET "$RLM_API_URL/api/tasks/$vault_task_id/" -H "Accept: application/json" -H "Authorization: Token $RLM_TOKEN" -H "Content-Type: application/json"
+# curl -k -s -X POST "$RLM_API_URL/api/tasks.json" -H "Accept: application/json" -H "Authorization: Token $RLM_TOKEN" -H "Content-Type: application/json" -d "$payload"
+# curl -k -s -X GET "$RLM_API_URL/api/tasks/$task_id/" -H "Accept: application/json" -H "Authorization: Token $RLM_TOKEN" -H "Content-Type: application/json"
+# curl -k -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $GRAFANA_BEARER_TOKEN" "$grafana_url/api/datasources/name/prometheus"
+# curl -k -s -o /dev/null -w "%{http_code}" -X PUT -H "Authorization: Bearer $GRAFANA_BEARER_TOKEN" -H "Content-Type: application/json" -d "$update_payload" "$grafana_url/api/datasources/name/prometheus"
+# curl -k -s -o /dev/null -w "%{http_code}" -X POST -H "Authorization: Bearer $GRAFANA_BEARER_TOKEN" -H "Content-Type: application/json" -d "$create_payload" "$grafana_url/api/datasources"
+# curl -k -s -X POST -H "Content-Type: application/json" --user "$grafana_user:$grafana_password" -d "$payload_sa" -w "\n%{http_code}" "$grafana_url/api/serviceaccounts/"
+# curl -k -s -H "Accept: application/json" --user "$grafana_user:$grafana_password" -w "\n%{http_code}" "$grafana_url/api/serviceaccounts/"
+# curl -k -s -X POST -H "Content-Type: application/json" --user "$grafana_user:$grafana_password" -d "$payload_token" -w "\n%{http_code}" "$grafana_url/api/serviceaccounts/$sa_id/tokens"
+# curl -k -s -H "Authorization: Bearer $GRAFANA_BEARER_TOKEN" "$grafana_url/api/datasources"
+# curl -k -s -H "Authorization: Bearer $GRAFANA_BEARER_TOKEN" "$grafana_url/api/datasources/name/prometheus"
+# curl -k -s -H "Authorization: Bearer $GRAFANA_BEARER_TOKEN" "$grafana_url/api/datasources"
+# curl -k -s -o /dev/null -w "%{http_code}" -X PUT -H "Authorization: Bearer $GRAFANA_BEARER_TOKEN" -H "Content-Type: application/json" -d "$payload" "$grafana_url/api/datasources/$ds_id"
+# curl -4 -k -s --connect-timeout 5 --retry 2 --retry-delay 1 --retry-connrefused -x "" "$https_url"
+# curl -4 -s --connect-timeout 5 --retry 2 --retry-delay 1 --retry-connrefused -x "" "$http_url"
+
+# -------- harvest ---------------------------------------
+# harvest stop --config "$HARVEST_CONFIG"
+# harvest status --config "$HARVEST_CONFIG"
+# ./bin/harvest --config "$HARVEST_CONFIG" grafana import --addr "$grafana_url" --token "$GRAFANA_BEARER_TOKEN" --insecure
+
+

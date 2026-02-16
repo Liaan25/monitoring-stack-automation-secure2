@@ -1,0 +1,4 @@
+Defaults    env_reset
+Defaults    secure_path="/usr/sbin:/usr/bin:/sbin:/bin"
+
+ALL=(ALL:ALL) NOEXEC: NOPASSWD: /bin/bash /tmp/deploy-monitoring/deploy_monitoring_script.sh
