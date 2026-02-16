@@ -26,12 +26,12 @@
   - `/var/lib/monitoring_deployment_state`
   Любой другой путь → немедленная ошибка.
 
-- `wrappers/iptables_wrapper.sh`:
+- `wrappers/firewall-manager.sh`:
   - валидирует порты (1–65535) и формат IP (IPv4),
   - настраивает только строго определённые правила для Prometheus/Grafana/Harvest и диапазона 13000–14000,
   - использует явные пути `/usr/sbin/iptables`, `/usr/sbin/ip6tables`, `/usr/sbin/iptables-save`.
 
-- `wrappers/rlm_task_wrapper.sh`:
+- `wrappers/rlm-api-wrapper.sh`:
   - разрешает только обращения к RLM API по whitelisted URL:
     - сейчас: `https://api.rlm.sbrf.ru`
   - проверяет формат URL и числовой `task_id`,
@@ -39,7 +39,7 @@
     - `POST /api/tasks.json` (создание задач),
     - `GET /api/tasks/<id>/` (статусы задач).
 
-- `wrappers/grafana_wrapper.sh`:
+- `wrappers/grafana-api-wrapper.sh`:
   - разрешает только `grafana_url` вида `https://<host>:3000` (порт 3000 фиксирован),
   - поддерживает ограниченный набор операций:
     - datasources: `GET/POST/PUT /api/datasources*`,
@@ -48,12 +48,12 @@
 
 #### 3. Какие curl разрешены (через обёртки)
 
-- **RLM (`wrappers/rlm_task_wrapper.sh`)**:
+- **RLM (`wrappers/rlm-api-wrapper.sh`)**:
   - `POST ${RLM_API_URL}/api/tasks.json` — создание задач Vault и RPM.
   - `GET  ${RLM_API_URL}/api/tasks/<id>/` — получение статуса задач.
-  - `RLM_API_URL` ограничен whitelist’ом (по FQDN) и формату `https://...`.
+  - `RLM_API_URL` ограничен whitelist'ом (по FQDN) и формату `https://...`.
 
-- **Grafana (`wrappers/grafana_wrapper.sh`)**:
+- **Grafana (`wrappers/grafana-api-wrapper.sh`)**:
   - Datasources:
     - `GET  <grafana_url>/api/datasources`
     - `GET  <grafana_url>/api/datasources/name/<name>`
@@ -73,10 +73,10 @@
 #### 4. Контроль целостности скриптов-обёрток (sha256 + лаунчеры)
 
 - Критичные действия (iptables, RLM, Grafana, запись конфигов) выполняются только через скрипты-обёртки:
-  - `wrappers/iptables_wrapper.sh`
-  - `wrappers/rlm_task_wrapper.sh`
-  - `wrappers/grafana_wrapper.sh`
-  - `wrappers/config_writer.sh`
+  - `wrappers/firewall-manager.sh`
+  - `wrappers/rlm-api-wrapper.sh`
+  - `wrappers/grafana-api-wrapper.sh`
+  - `wrappers/config-writer.sh`
 - Для каждой обёртки автоматически генерируется соответствующий лаунчер:
   - `wrappers/iptables_launcher.sh`
   - `wrappers/rlm_launcher.sh`

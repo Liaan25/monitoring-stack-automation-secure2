@@ -39,13 +39,16 @@ ALL=(ALL:ALL) NOEXEC: NOPASSWD: /bin/bash /tmp/deploy-monitoring/monitoring_depl
 ############################################################
 
 # Пример: обёртка для настройки iptables (белый список портов)
-#ALL=(ALL:ALL) NOEXEC: NOPASSWD: /opt/monitoring/bin/iptables_wrapper.sh
+#ALL=(ALL:ALL) NOEXEC: NOPASSWD: /opt/monitoring/bin/iptables_launcher.sh
 
 # Пример: обёртка для работы с RLM (curl к RLM API с валидацией)
-#ALL=(ALL:ALL) NOEXEC: NOPASSWD: /opt/monitoring/bin/rlm_task_wrapper.sh
+#ALL=(ALL:ALL) NOEXEC: NOPASSWD: /opt/monitoring/bin/rlm_launcher.sh
+
+# Пример: обёртка для работы с Grafana API
+#ALL=(ALL:ALL) NOEXEC: NOPASSWD: /opt/monitoring/bin/grafana_launcher.sh
 
 # Пример: обёртка для безопасной записи конфигов
-#ALL=(ALL:ALL) NOEXEC: NOPASSWD: /opt/monitoring/bin/config_writer.sh
+#ALL=(ALL:ALL) NOEXEC: NOPASSWD: /opt/monitoring/bin/config_writer_launcher.sh
 
 
 ############################################################

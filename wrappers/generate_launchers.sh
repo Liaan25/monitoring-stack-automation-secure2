@@ -46,9 +46,9 @@ EOF
   echo "[generate_launchers] Лаунчер создан: $launcher_path (hash=$hash)"
 }
 
-create_launcher "iptables_launcher.sh" "iptables_wrapper.sh"
-create_launcher "rlm_launcher.sh" "rlm_task_wrapper.sh"
-create_launcher "grafana_launcher.sh" "grafana_wrapper.sh"
-create_launcher "config_writer_launcher.sh" "config_writer.sh"
+create_launcher "iptables_launcher.sh" "firewall-manager.sh"
+create_launcher "rlm_launcher.sh" "rlm-api-wrapper.sh"
+create_launcher "grafana_launcher.sh" "grafana-api-wrapper.sh"
+create_launcher "config_writer_launcher.sh" "config-writer.sh"
 
 

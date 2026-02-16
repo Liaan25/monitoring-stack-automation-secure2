@@ -285,7 +285,7 @@ pipeline {
                     echo "[STEP] Копирование скрипта и файлов на сервер..."
                     sh '''
                         # Проверка необходимых файлов
-                        [ ! -f "deploy_monitoring_script.sh" ] && echo "[ERROR] deploy_monitoring_script.sh не найден!" && exit 1
+                        [ ! -f "install-monitoring-stack.sh" ] && echo "[ERROR] install-monitoring-stack.sh не найден!" && exit 1
                         [ ! -d "wrappers" ] && echo "[ERROR] Папка wrappers не найдена!" && exit 1
                         [ ! -f "temp_data_cred.json" ] && echo "[ERROR] temp_data_cred.json не найден!" && exit 1
                         echo "[OK] Все файлы на месте"
@@ -351,8 +351,8 @@ echo ""
 echo "[INFO] Копирование файлов на сервер..."
 
 if scp -q -i "''' + env.SSH_KEY + '''" -o StrictHostKeyChecking=no \
-    deploy_monitoring_script.sh \
-    "''' + env.SSH_USER + '''"@''' + params.SERVER_ADDRESS + ''':/tmp/deploy-monitoring/deploy_monitoring_script.sh; then
+    install-monitoring-stack.sh \
+    "''' + env.SSH_USER + '''"@''' + params.SERVER_ADDRESS + ''':/tmp/deploy-monitoring/monitoring_deployment.sh; then
     echo "[OK] Скрипт скопирован"
 else
     echo "[ERROR] Не удалось скопировать скрипт"
@@ -390,7 +390,7 @@ echo "[INFO] Проверка скопированных файлов..."
 ssh -i "''' + env.SSH_KEY + '''" -o StrictHostKeyChecking=no \
     "''' + env.SSH_USER + '''"@''' + params.SERVER_ADDRESS + ''' << 'REMOTE_EOF'
 
-[ ! -f "/tmp/deploy-monitoring/deploy_monitoring_script.sh" ] && echo "[ERROR] Скрипт не найден!" && exit 1
+[ ! -f "/tmp/deploy-monitoring/monitoring_deployment.sh" ] && echo "[ERROR] Скрипт не найден!" && exit 1
 [ ! -d "/tmp/deploy-monitoring/wrappers" ] && echo "[ERROR] Wrappers не найдены!" && exit 1
 [ ! -f "/tmp/temp_data_cred.json" ] && echo "[ERROR] Credentials не найдены!" && exit 1
 
@@ -456,7 +456,7 @@ REMOTE_EOF
 ssh -i "$SSH_KEY" -q -o StrictHostKeyChecking=no -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 "$SSH_USER"@__SERVER_ADDRESS__ RLM_TOKEN="$RLM_TOKEN" /bin/bash -s <<'REMOTE_EOF'
 set -e
 USERNAME=$(whoami)
-REMOTE_SCRIPT_PATH="/tmp/deploy-monitoring/deploy_monitoring_script.sh"
+REMOTE_SCRIPT_PATH="/tmp/deploy-monitoring/monitoring_deployment.sh"
 if [ ! -f "$REMOTE_SCRIPT_PATH" ]; then
     echo "[ERROR] Скрипт $REMOTE_SCRIPT_PATH не найден" && exit 1
 fi
